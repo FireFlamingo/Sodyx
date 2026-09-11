@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+# Defense in depth: ignore rules alone do not prevent force-staging sensitive files.
+git diff --cached --name-only --diff-filter=ACMR | while IFS= read -r path; do
+    case "$path" in
+        SODYX_CODEX_MASTER_BRIEF.md|*/SODYX_CODEX_MASTER_BRIEF.md|.env|.env.*|*/.env|*/.env.*|*.jks|*.keystore|*.p12|*.pfx|*.pem|*.key|local.properties|*/local.properties|*secrets.properties|*keystore.properties|*key.properties|*google-services.json)
+            printf '%s\n' "Commit blocked: sensitive/local-only path: $path" >&2
+            exit 1
+            ;;
+    esac
+done
+
+scanner=$(git config --get sodyx.gitleaksPath || printf '%s' gitleaks)
+if ! command -v "$scanner" >/dev/null 2>&1; then
+    printf '%s\n' 'Install Gitleaks 8.28.0 or newer and put it on PATH before committing.' >&2
+    exit 1
+fi
+"$scanner" git --pre-commit --staged --redact --no-banner
