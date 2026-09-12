@@ -2,9 +2,16 @@
 
 Native Android foundation for a privacy-first, one-to-one messenger.
 
-**Phase 0 only:** the app launches a blank dark Compose surface. It has no messaging,
-identity, persistence, encryption, transport, analytics, or product UI. This is not
-yet a usable or security-reviewed messenger. Phase 1 requires explicit authorization.
+**Phase 1:** a dark, native Compose design study with a conversation list, sample chat,
+invitation entry point, privacy/settings page, session-ending demonstration, and
+empty states. All content is local sample data; nothing is sent. This is not yet a
+usable or security-reviewed messenger. Phase 2 requires explicit authorization.
+
+Use **Settings → Sample conversations** to explore the empty list. Opening Frozen
+Lake shows a connection without an active session. Closing a sample session affects
+that preview only; Settings can restore it. Drafts and preview choices live only in
+memory and reset when the activity is recreated. Invitation buttons explain the
+future interaction without creating tokens or opening the camera.
 
 ## Build
 
@@ -35,8 +42,9 @@ With an emulator or test device connected:
 adb shell am start -W -n io.sodyx.app.debug/io.sodyx.app.MainActivity
 ```
 
-Instrumentation tests verify launch, activity recreation, and installed privacy
-defaults. JVM tests check source-manifest policy. Android lint treats warnings as
+Instrumentation tests verify launch, activity recreation, installed privacy defaults,
+session cancellation, per-conversation closure, empty-list navigation, and unsent
+draft behavior. JVM tests check source-manifest policy. Android lint treats warnings as
 errors except deliberately reviewed SDK/dependency update notices. CI runs the
 host checks and builds; device tests currently run locally.
 
@@ -59,4 +67,5 @@ Always review staged content before committing. The local master brief belongs i
 `.git/info/exclude` and must never be staged, committed, or pushed.
 
 See [the foundation decision](docs/decisions/0001-android-foundation.md) for scope,
-SDK choices, and current privacy limitations.
+SDK choices, and current privacy limitations. See [the design system](docs/DESIGN_SYSTEM.md)
+for Phase 1 tokens, typography, interactions, accessibility, and font licensing.

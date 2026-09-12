@@ -19,7 +19,7 @@ class FoundationTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun blankSurfaceSurvivesActivityRecreation() {
+    fun applicationSurfaceSurvivesActivityRecreation() {
         compose.onRoot().assertIsDisplayed()
         compose.activityRule.scenario.recreate()
         compose.onRoot().assertIsDisplayed()
