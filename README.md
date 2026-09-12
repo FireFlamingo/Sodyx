@@ -5,7 +5,14 @@ Native Android foundation for a privacy-first, one-to-one messenger.
 **Phase 1:** a dark, native Compose design study with a conversation list, sample chat,
 invitation entry point, privacy/settings page, session-ending demonstration, and
 empty states. All content is local sample data; nothing is sent. This is not yet a
-usable or security-reviewed messenger. Phase 2 requires explicit authorization.
+usable or security-reviewed messenger.
+
+**Phase 2:** an immutable, pure-Kotlin domain model for local identity references,
+pairwise relationships, invitation intent, conversations, sessions, lifecycle
+transitions, plain messages, and envelope references. It defines boundaries and
+validation only; it does not provide keys, persistence, transport, QR redemption,
+secure identity generation, or cleanup guarantees. The Phase 1 UI remains a static
+preview and does not consume this model. Phase 3 requires explicit authorization.
 
 Use **Settings → Sample conversations** to explore the empty list. Opening Frozen
 Lake shows a connection without an active session. Closing a sample session affects
@@ -22,8 +29,11 @@ Set `JAVA_HOME` to a compatible JDK; the system JDK 25 cannot run Gradle 8.13.
 For IDE use, Android Studio Narwhal 3 / 2025.1.3 or a compatible newer version is required.
 
 ```sh
-./gradlew spotlessCheck testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease
+./gradlew spotlessCheck :domain:test testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease
 ```
+
+The Phase 2 domain tests can be run independently with
+`./gradlew :domain:test`; the full checks include that task in CI.
 
 On Windows, use `gradlew.bat`. Format source with `./gradlew spotlessApply`.
 The first build downloads dependencies from Google Maven, Maven Central, and the
@@ -44,7 +54,8 @@ adb shell am start -W -n io.sodyx.app.debug/io.sodyx.app.MainActivity
 
 Instrumentation tests verify launch, activity recreation, installed privacy defaults,
 session cancellation, per-conversation closure, empty-list navigation, and unsent
-draft behavior. JVM tests check source-manifest policy. Android lint treats warnings as
+draft behavior. JVM tests check source-manifest policy; domain tests check identity,
+relationship, invitation, message, and session invariants. Android lint treats warnings as
 errors except deliberately reviewed SDK/dependency update notices. CI runs the
 host checks and builds; device tests currently run locally.
 

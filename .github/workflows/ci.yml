@@ -1,4 +1,4 @@
-name: Android foundation
+name: Android foundation and domain model
 
 on:
   push:
@@ -30,5 +30,5 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
-      - name: Check formatting, unit tests, Android lint, and both APK variants
-        run: ./gradlew spotlessCheck testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease --console=plain
+      - name: Check formatting, domain and app tests, Android lint, and both APK variants
+        run: ./gradlew spotlessCheck :domain:test testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease --console=plain
