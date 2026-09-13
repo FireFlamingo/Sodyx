@@ -69,7 +69,10 @@ Icons use consistent square-capped strokes on a 24 dp grid. All icon-only action
 have spoken labels. The adaptive launcher mark is an angular S and includes a
 monochrome layer for themed launcher icons. No third-party icon package is needed.
 
-## Screens and behavior
+## Screens and behavior (Phase 1 historical design)
+
+The following fixture descriptions record the visual design phase. Phase 3 uses
+the controller and repository for current local behavior.
 
 - **Conversations:** open, ruled rows with relationship-specific sample aliases;
   no public profile ID. Both the plus action and New connection reach invitations.
@@ -87,8 +90,13 @@ monochrome layer for themed launcher icons. No third-party icon package is neede
   session. The connection remains reachable after the sample session closes.
 
 No security preference is presented as a functioning protection when it is not.
-No global user identity, domain model, persistence, cryptography, network, BLE, or
-mock API was added. The Kotlin fixture objects are UI data, not protocol identities.
+Phase 3 replaces the Phase 1-only fixture source with local repository state where
+the corresponding screen is implemented. That local state is app-private and
+plaintext; it is not encryption, a global user identity, a protocol identity,
+transport, BLE, or a mock API. See [local persistence](LOCAL_PERSISTENCE.md) for
+the repository boundary, transaction rules, and deletion limits. Screens that
+remain fixture-backed are labeled as previews until their repository integration
+is complete.
 
 ## Accessibility and motion
 
@@ -106,21 +114,25 @@ Page changes use a 160 ms crossfade without spatial movement, springs, or loops.
 Compose follows the system animator duration scale; the in-app Reduce motion choice
 also forces immediate transitions. No independent animation timer is used.
 
-Fixture content, drafts, route, and preview choices use `remember`, not
-`rememberSaveable`. Activity recreation resets the preview and discards drafts.
-This is deliberate for this static phase, not the final session lifecycle.
+Phase 3 data and saved messages are repository-backed and survive activity
+recreation. The unsent composer draft remains transient UI state. Ending a
+session clears persisted message rows and retains the relationship and closed
+session tombstone; it does not erase immutable snapshots or external copies.
+The Phase 1 fixture state used `remember`, not `rememberSaveable`; that is
+historical and no longer the current lifecycle contract.
 
 ## Validation
 
 Run the commands in README. Host tests guard the privacy manifest. Device tests
-exercise launch/recreation, unsent drafts, cancellation, isolated sample closure,
-and empty-list invitation navigation. Manual emulator review covers the five screens,
-closed-session and empty-list states, a compact viewport, keyboard, and enlarged text.
+exercise launch/recreation, repository round trips, message deletion, session
+closure, relationship isolation, invalid writes, stale writes, concurrency, and
+foreign-key protection. Manual emulator review covers local creation, session,
+message, closure, empty-list, compact viewport, keyboard, and enlarged-text states.
 These checks do not replace a later TalkBack review or actual device testing.
 
 ## Deferred
 
-Phase 2 domain concepts and all subsequent storage, contact, cryptography, and
-transport phases remain untouched. The current copy is English; localization,
+Phase 2 domain concepts remain the source of truth for persisted values. Contact,
+cryptography, and transport phases remain deferred. The current copy is English; localization,
 production identity verification copy, release signing, and distribution need their
 own review. No security guarantee follows from the visual design.

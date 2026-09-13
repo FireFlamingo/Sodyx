@@ -40,6 +40,25 @@ class Session private constructor(
     }
 
     companion object {
+        /** Rehydrates a previously validated local database row; this performs no authentication. */
+        fun restore(
+            id: SessionId,
+            relationshipId: RelationshipId,
+            localIdentity: PairwiseIdentity,
+            peerIdentity: PairwiseIdentity,
+            localAlias: DisplayAlias,
+            peerAlias: DisplayAlias,
+            state: SessionState
+        ): Session = Session(
+            id,
+            relationshipId,
+            SessionParticipants(
+                SessionParticipant(localIdentity, localAlias),
+                SessionParticipant(peerIdentity, peerAlias)
+            ),
+            state
+        )
+
         internal fun create(
             id: SessionId,
             relationship: Relationship,

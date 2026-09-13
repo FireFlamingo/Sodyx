@@ -119,10 +119,15 @@ internal fun LineIcon(symbol: Symbol, color: Color = SodyxColor.Ink) {
 }
 
 @Composable
-internal fun IconAction(label: String, symbol: Symbol, onClick: () -> Unit) {
+internal fun IconAction(
+    label: String,
+    symbol: Symbol,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
     Box(
         Modifier.size(SodyxSpace.Touch).clip(SodyxShape.Control)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center
     ) { LineIcon(symbol) }
@@ -134,7 +139,8 @@ internal fun Action(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     primary: Boolean = false,
-    destructive: Boolean = false
+    destructive: Boolean = false,
+    enabled: Boolean = true
 ) {
     val tint = if (destructive) SodyxColor.Danger else SodyxColor.Accent
     Row(
@@ -146,7 +152,7 @@ internal fun Action(
                 if (primary) tint else SodyxColor.ControlBorder,
                 SodyxShape.Control
             )
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = SodyxSpace.Normal, vertical = SodyxSpace.Medium),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -162,11 +168,20 @@ internal fun Action(
 }
 
 @Composable
-internal fun TextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TextAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
     Box(
         modifier.defaultMinSize(
             minHeight = SodyxSpace.Touch
-        ).clickable(role = Role.Button, onClick = onClick).padding(vertical = SodyxSpace.Medium),
+        ).clickable(
+            enabled = enabled,
+            role = Role.Button,
+            onClick = onClick
+        ).padding(vertical = SodyxSpace.Medium),
         contentAlignment = Alignment.CenterStart
     ) {
         Copy(label, style = SodyxType.Button, color = SodyxColor.Accent)
@@ -176,7 +191,7 @@ internal fun TextAction(label: String, onClick: () -> Unit, modifier: Modifier =
 @Composable
 internal fun PreviewNote() {
     Copy(
-        "Design preview · Nothing is sent",
+        "Local prototype · Stored unencrypted · Nothing is sent",
         Modifier.fillMaxWidth().padding(vertical = SodyxSpace.Small),
         SodyxType.Caption.copy(textAlign = TextAlign.Center),
         SodyxColor.Secondary

@@ -22,11 +22,18 @@ invariant is specified. `transitionSession` updates only the matching session in
 conversation. Since values are immutable, callers must retain the returned
 conversation as the authoritative state.
 
+Phase 3 adds a repository boundary that re-reads the current database session
+state and validates the expected state inside the write transaction before
+mutating it. The repository schema also chooses at most one active session per
+relationship. This database authority does not revoke or erase immutable Phase 2
+snapshots already retained by callers; callers must refresh from the repository
+after a lifecycle change. See [local persistence](LOCAL_PERSISTENCE.md).
+
 `Message.create` checks the `Session` value it receives, so passing a stale `ACTIVE`
-snapshot still succeeds. A future repository or write boundary must serialize,
-revalidate, and coordinate state transitions; this Phase 2 model is not a security
-boundary. Message and envelope references are caller-supplied wrappers. Standalone
-models do not enforce uniqueness for message or envelope IDs.
+snapshot still succeeds. The Phase 3 repository revalidates and serializes writes,
+but the Phase 2 model itself is not a security boundary. Message and envelope
+references are caller-supplied wrappers. Standalone models do not enforce
+uniqueness for message or envelope IDs.
 
 Invitations currently represent local intent with an owner, offered pairwise
 identity, timestamps, and an expiry check. Validity is the half-open interval

@@ -40,6 +40,20 @@ class DomainInvariantsTest {
         assertEquals(2, aggregate.relationships.size)
     }
 
+    @Test fun restoringSessionWithDuplicateParticipantsIsRejected() {
+        assertThrows(IllegalArgumentException::class.java) {
+            Session.restore(
+                session(40),
+                relationship(10),
+                pair(20),
+                pair(20),
+                alias("Local"),
+                alias("Peer"),
+                SessionState.ACTIVE
+            )
+        }
+    }
+
     @Test fun pairwiseIdentitiesCannotCollideAcrossRelationshipsOrRoles() {
         val owner = local(1)
         val first = LocalIdentity(owner)

@@ -16,128 +16,129 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import io.sodyx.app.data.SodyxRepository
 import io.sodyx.app.ui.design.Copy
-import io.sodyx.app.ui.design.LineIcon
 import io.sodyx.app.ui.design.PreviewNote
 import io.sodyx.app.ui.design.Rule
 import io.sodyx.app.ui.design.SodyxColor
 import io.sodyx.app.ui.design.SodyxMotion
 import io.sodyx.app.ui.design.SodyxSpace
 import io.sodyx.app.ui.design.SodyxType
-import io.sodyx.app.ui.design.Symbol
 
-private enum class PreviewPage { Conversations, Chat, AddContact, Settings, EndSession }
+private enum class Page { Conversations, Chat, AddContact, Settings, EndSession }
 
 @Composable
-internal fun SodyxApp() {
-    val expandedText = LocalDensity.current.fontScale >= 1.3f
-    // Memory only: drafts and demonstration choices never enter saved-instance state or storage.
-    var page by remember { mutableStateOf(PreviewPage.Conversations) }
-    var contact by remember { mutableStateOf(sampleConversations.first()) }
-    var samples by remember { mutableStateOf(true) }
-    var ended by remember { mutableStateOf(emptySet<String>()) }
-    var reducedMotion by remember { mutableStateOf(false) }
-    val back = {
-        page =
-            if (page == PreviewPage.EndSession) PreviewPage.Chat else PreviewPage.Conversations
+internal fun SodyxApp(repository: SodyxRepository, resumeGeneration: Int = 0) {
+    val scope = rememberCoroutineScope()
+    val controller = remember(repository, scope) { LocalSessionController(repository, scope) }
+    val state = controller.state
+    var page by remember { mutableStateOf(Page.Conversations) }
+    LaunchedEffect(resumeGeneration) { controller.refresh() }
+    BackHandler(page != Page.Conversations) {
+        if (!state.busy) {
+            page =
+                if (page == Page.EndSession) Page.Chat else Page.Conversations
+        }
     }
-    BackHandler(page != PreviewPage.Conversations, back)
-
     Box(
         Modifier.fillMaxSize().background(SodyxColor.Background).safeDrawingPadding().imePadding(),
-        contentAlignment = Alignment.TopCenter
+        Alignment.TopCenter
     ) {
         Column(Modifier.widthIn(max = SodyxSpace.ContentWidth).fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 Crossfade(
-                    page,
-                    animationSpec = tween(if (reducedMotion) 0 else SodyxMotion.SCREEN_MILLIS),
+                    targetState = page,
+                    animationSpec = tween(
+                        if (state.reducedMotion) 0 else SodyxMotion.SCREEN_MILLIS
+                    ),
                     label = "Page"
                 ) { destination ->
                     when (destination) {
-                        PreviewPage.Conversations -> ConversationList(samples, ended, {
-                            page =
-                                PreviewPage.AddContact
-                        }) {
-                            contact = it
-                            page = PreviewPage.Chat
-                        }
-                        PreviewPage.Chat -> ConversationScreen(
-                            contact,
-                            contact.alias in ended,
-                            back
-                        ) {
-                            page =
-                                PreviewPage.EndSession
-                        }
-                        PreviewPage.AddContact -> AddContactScreen(back)
-                        PreviewPage.Settings -> SettingsScreen(samples, reducedMotion, {
-                            samples =
-                                it
-                        }, { reducedMotion = it }) {
-                            ended = emptySet()
-                            samples = true
-                        }
-                        PreviewPage.EndSession -> EndSessionScreen(contact.alias, back) {
-                            ended =
-                                ended + contact.alias
-                            page = PreviewPage.Conversations
-                        }
+                        Page.Conversations -> ConversationList(
+                            state.relationships,
+                            onAdd = { if (!state.busy) page = Page.AddContact },
+                            onOpen = { row -> controller.open(row) { page = Page.Chat } }
+                        )
+                        Page.Chat -> ConversationScreen(
+                            state.selected,
+                            state.session,
+                            state.messages,
+                            state.draft,
+                            controller::setDraft,
+                            { if (!state.busy) page = Page.Conversations },
+                            { if (!state.busy) controller.startSession {} },
+                            { if (!state.busy) page = Page.EndSession },
+                            { controller.saveDraft {} },
+                            state.busy
+                        )
+                        Page.AddContact -> AddContactScreen(
+                            onBack = { if (!state.busy) page = Page.Conversations },
+                            onCreate = { alias ->
+                                controller.createRelationship(alias) { page = Page.Conversations }
+                            },
+                            busy = state.busy
+                        )
+                        Page.Settings -> SettingsScreen(
+                            state.reducedMotion,
+                            controller::setReducedMotion
+                        )
+                        Page.EndSession -> EndSessionScreen(
+                            state.selected?.alias?.value.orEmpty(),
+                            { if (!state.busy) page = Page.Chat },
+                            {
+                                if (!state.busy) {
+                                    controller.endSession { page = Page.Conversations }
+                                }
+                            },
+                            state.busy
+                        )
                     }
                 }
             }
+            state.error?.let {
+                Copy(
+                    it,
+                    Modifier.padding(SodyxSpace.Small),
+                    SodyxType.Caption,
+                    SodyxColor.Danger
+                )
+            }
             PreviewNote()
-            if (page == PreviewPage.Conversations || page == PreviewPage.Settings) {
+            if (page == Page.Conversations || page == Page.Settings) {
                 Rule()
                 Row(Modifier.fillMaxWidth()) {
-                    listOf(PreviewPage.Conversations, PreviewPage.Settings).forEach { tab ->
-                        val active = page == tab
+                    listOf(Page.Conversations, Page.Settings).forEach { tab ->
+                        val selected = page == tab
                         Row(
-                            Modifier.weight(1f).semantics { selected = active }
-                                .clickable(role = Role.Tab) { page = tab }
-                                .padding(
-                                    horizontal = SodyxSpace.Small,
-                                    vertical = SodyxSpace.Normal
-                                ),
-                            horizontalArrangement = Arrangement.spacedBy(
-                                SodyxSpace.Small,
-                                Alignment.CenterHorizontally
-                            ),
-                            verticalAlignment = Alignment.CenterVertically
+                            Modifier.weight(1f).clickable(enabled = !state.busy, role = Role.Tab) {
+                                page =
+                                    tab
+                            }.semantics {
+                                this.selected = selected
+                            }.padding(SodyxSpace.Normal),
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            val tint = if (active) SodyxColor.Accent else SodyxColor.Secondary
-                            if (!expandedText) {
-                                LineIcon(
-                                    if (tab ==
-                                        PreviewPage.Settings
-                                    ) {
-                                        Symbol.Settings
-                                    } else {
-                                        Symbol.Conversations
-                                    },
-                                    tint
-                                )
-                            }
                             Copy(
                                 if (tab ==
-                                    PreviewPage.Settings
+                                    Page.Settings
                                 ) {
                                     "Settings"
                                 } else {
                                     "Conversations"
                                 },
                                 style = SodyxType.Caption,
-                                color = tint
+                                color = if (selected) SodyxColor.Accent else SodyxColor.Secondary
                             )
                         }
                     }

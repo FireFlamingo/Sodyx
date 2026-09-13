@@ -12,13 +12,21 @@ pairwise relationships, invitation intent, conversations, sessions, lifecycle
 transitions, plain messages, and envelope references. It defines boundaries and
 validation only; it does not provide keys, persistence, transport, QR redemption,
 secure identity generation, or cleanup guarantees. The Phase 1 UI remains a static
-preview and does not consume this model. Phase 3 requires explicit authorization.
+preview and does not consume this model.
 
-Use **Settings → Sample conversations** to explore the empty list. Opening Frozen
-Lake shows a connection without an active session. Closing a sample session affects
-that preview only; Settings can restore it. Drafts and preview choices live only in
-memory and reset when the activity is recreated. Invitation buttons explain the
-future interaction without creating tokens or opening the camera.
+**Phase 3:** a local persistence adapter around the Phase 2 model. The prototype
+uses app-private SQLite through `SQLiteOpenHelper`, with repository-owned
+transactions, foreign-key checks, bound parameters, and logical deletion. It
+does not add encryption, key management, transport, peer deletion, backups, or
+real invitation redemption. See [local persistence](docs/LOCAL_PERSISTENCE.md),
+[session lifecycle](docs/SESSION_LIFECYCLE.md), and [identity model](docs/IDENTITY_MODEL.md)
+for the boundaries and guarantees.
+
+On a fresh install the database is empty. Create a test connection, open it, start
+a local session explicitly, and save messages locally as plaintext. Ending a
+session logically deletes its stored messages while preserving the relationship
+and closed-session tombstone. No real invitations, QR redemption, camera flow,
+network transport, or peer-side deletion is available.
 
 ## Build
 
@@ -34,6 +42,11 @@ For IDE use, Android Studio Narwhal 3 / 2025.1.3 or a compatible newer version i
 
 The Phase 2 domain tests can be run independently with
 `./gradlew :domain:test`; the full checks include that task in CI.
+
+Phase 3 repository and SQLite instrumentation tests run locally against an
+Android emulator or connected test device. The complete local check includes
+host formatting, domain/app tests, lint, debug/release builds, and device
+instrumentation; CI continues to run the host checks and builds.
 
 On Windows, use `gradlew.bat`. Format source with `./gradlew spotlessApply`.
 The first build downloads dependencies from Google Maven, Maven Central, and the
@@ -54,7 +67,10 @@ adb shell am start -W -n io.sodyx.app.debug/io.sodyx.app.MainActivity
 
 Instrumentation tests verify launch, activity recreation, installed privacy defaults,
 session cancellation, per-conversation closure, empty-list navigation, and unsent
-draft behavior. JVM tests check source-manifest policy; domain tests check identity,
+draft behavior. Phase 3 instrumentation also checks repository round trips,
+transactions, foreign-key behavior, stale writes, concurrency, and deletion
+isolation. The final Phase 3 gate runs 11 JVM tests and 18 instrumentation tests.
+JVM tests check source-manifest policy; domain tests check identity,
 relationship, invitation, message, and session invariants. Android lint treats warnings as
 errors except deliberately reviewed SDK/dependency update notices. CI runs the
 host checks and builds; device tests currently run locally.
@@ -79,4 +95,7 @@ Always review staged content before committing. The local master brief belongs i
 
 See [the foundation decision](docs/decisions/0001-android-foundation.md) for scope,
 SDK choices, and current privacy limitations. See [the design system](docs/DESIGN_SYSTEM.md)
-for Phase 1 tokens, typography, interactions, accessibility, and font licensing.
+for Phase 1 tokens, typography, interactions, accessibility, and font licensing;
+Phase 3 screens read local repository state where implemented instead of using
+Phase 1-only fixtures. See [local persistence](docs/LOCAL_PERSISTENCE.md) for
+repository and deletion boundaries.
