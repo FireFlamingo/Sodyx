@@ -36,7 +36,17 @@ import io.sodyx.app.ui.design.SodyxMotion
 import io.sodyx.app.ui.design.SodyxSpace
 import io.sodyx.app.ui.design.SodyxType
 
-private enum class Page { Conversations, Chat, AddContact, Settings, EndSession }
+private enum class Page {
+    Conversations,
+    Chat,
+    AddContact,
+    InviteCreate,
+    InviteDisplay,
+    InviteScan,
+    InviteConfirm,
+    Settings,
+    EndSession
+}
 
 @Composable
 internal fun SodyxApp(repository: SodyxRepository, resumeGeneration: Int = 0) {
@@ -44,11 +54,17 @@ internal fun SodyxApp(repository: SodyxRepository, resumeGeneration: Int = 0) {
     val controller = remember(repository, scope) { LocalSessionController(repository, scope) }
     val state = controller.state
     var page by remember { mutableStateOf(Page.Conversations) }
+    var pendingInvitation by remember { mutableStateOf("") }
     LaunchedEffect(resumeGeneration) { controller.refresh() }
     BackHandler(page != Page.Conversations) {
         if (!state.busy) {
-            page =
-                if (page == Page.EndSession) Page.Chat else Page.Conversations
+            page = when (page) {
+                Page.EndSession -> Page.Chat
+                Page.InviteConfirm -> Page.InviteScan
+                Page.InviteCreate, Page.InviteDisplay, Page.InviteScan -> Page.AddContact
+                Page.AddContact, Page.Chat, Page.Settings -> Page.Conversations
+                Page.Conversations -> Page.Conversations
+            }
         }
     }
     Box(
@@ -87,7 +103,51 @@ internal fun SodyxApp(repository: SodyxRepository, resumeGeneration: Int = 0) {
                             onCreate = { alias ->
                                 controller.createRelationship(alias) { page = Page.Conversations }
                             },
+                            onInvite = {
+                                controller.clearInvitationResult()
+                                page =
+                                    Page.InviteCreate
+                            },
+                            onScan = {
+                                controller.clearInvitationResult()
+                                page = Page.InviteScan
+                            },
                             busy = state.busy
+                        )
+                        Page.InviteCreate -> InvitationCreateScreen(
+                            { page = Page.AddContact },
+                            { controller.createInvitation { page = Page.InviteDisplay } },
+                            state.busy
+                        )
+                        Page.InviteDisplay -> InvitationDisplayScreen(
+                            state.invitations.lastOrNull(),
+                            { page = Page.AddContact },
+                            { payload ->
+                                pendingInvitation = payload
+                                page = Page.InviteConfirm
+                            }
+                        )
+                        Page.InviteScan -> InvitationScanScreen(
+                            { page = Page.AddContact },
+                            { payload ->
+                                pendingInvitation = payload
+                                page = Page.InviteConfirm
+                            },
+                            state.invitations.lastOrNull()?.payload?.encode(),
+                            state.busy
+                        )
+                        Page.InviteConfirm -> InvitationConfirmScreen(
+                            pendingInvitation,
+                            state.invitationResult,
+                            { page = Page.InviteScan },
+                            { alias ->
+                                controller.redeemInvitation(pendingInvitation, alias) { result ->
+                                    if (result is io.sodyx.app.data.RedemptionResult.Redeemed) {
+                                        page = Page.Conversations
+                                    }
+                                }
+                            },
+                            state.busy
                         )
                         Page.Settings -> SettingsScreen(
                             state.reducedMotion,

@@ -113,6 +113,9 @@ class EmptyConnectionTest {
             "Connection name"
         ).performClick().performTextInput("New connection")
         composeRule.onNodeWithText("Create test connection").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithText("New connection").fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithText("New connection").assertIsDisplayed()
         composeRule.activityRule.scenario.recreate()
         composeRule.onNodeWithText("New connection").assertIsDisplayed()

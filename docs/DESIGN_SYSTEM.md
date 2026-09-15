@@ -98,6 +98,18 @@ the repository boundary, transaction rules, and deletion limits. Screens that
 remain fixture-backed are labeled as previews until their repository integration
 is complete.
 
+Phase 4 adds current local invitation flows: create an invitation, view its QR
+image, import a local text or handoff representation, review expiry and
+consumption errors, and confirm a relationship-scoped pseudonym and cosmetic
+alias. The QR image is rendered locally with ZXing core; import is a labeled
+text/handoff simulation and requests no camera permission. No invitation action
+contacts another device, authenticates a person, establishes a network session,
+or provides cryptographic protection. Invalid, expired, malformed, and already
+redeemed states are communicated in text and do not rely on color alone.
+
+ZXing core 3.5.4 is distributed under Apache 2.0. Source:
+[ZXing core](https://github.com/zxing/zxing/tree/zxing-3.5.4/core).
+
 ## Accessibility and motion
 
 All text uses sp and wraps; scroll containers keep actions reachable with larger

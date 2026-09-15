@@ -22,11 +22,28 @@ real invitation redemption. See [local persistence](docs/LOCAL_PERSISTENCE.md),
 [session lifecycle](docs/SESSION_LIFECYCLE.md), and [identity model](docs/IDENTITY_MODEL.md)
 for the boundaries and guarantees.
 
+**Phase 4:** local contact-establishment simulation. The app can create a
+versioned one-time invitation, render it as a QR image, import a local text or
+handoff representation, enforce expiry and single redemption, create a local
+relationship, generate relationship-scoped pseudonyms, and display cosmetic
+aliases. QR rendering and import perform no network I/O and do not authenticate
+or establish a live contact. The guarantee is per local database; there is no
+issuer synchronization or server. Payloads have no authenticity or
+confidentiality, so syntactically valid tampering cannot be detected.
+
+Phase 4 does not provide global search, email or phone signup/discovery, public
+usernames, camera permission or camera scanning, network transport,
+cryptography, key exchange, or remote contact establishment. See [invitation
+lifecycle](docs/INVITATION_LIFECYCLE.md) and [the local invitation decision](docs/decisions/0002-local-invitations.md).
+
 On a fresh install the database is empty. Create a test connection, open it, start
 a local session explicitly, and save messages locally as plaintext. Ending a
 session logically deletes its stored messages while preserving the relationship
-and closed-session tombstone. No real invitations, QR redemption, camera flow,
-network transport, or peer-side deletion is available.
+and closed-session tombstone. From the invitation flow, create a local
+versioned invitation, view its QR representation, or import a text/handoff
+representation to exercise expiry, single redemption, pseudonym creation, and
+alias display. These actions remain local simulations: there is no camera
+permission, network transport, cryptography, or peer-side deletion.
 
 ## Build
 
@@ -66,11 +83,10 @@ adb shell am start -W -n io.sodyx.app.debug/io.sodyx.app.MainActivity
 ```
 
 Instrumentation tests verify launch, activity recreation, installed privacy defaults,
-session cancellation, per-conversation closure, empty-list navigation, and unsent
-draft behavior. Phase 3 instrumentation also checks repository round trips,
-transactions, foreign-key behavior, stale writes, concurrency, and deletion
-isolation. The final Phase 3 gate runs 11 JVM tests and 18 instrumentation tests.
-JVM tests check source-manifest policy; domain tests check identity,
+session cancellation, per-conversation closure, empty-list navigation, unsent
+draft behavior, repository round trips, transactions, foreign-key behavior,
+stale writes, concurrency, deletion isolation, and local invitation lifecycle
+behavior. JVM tests check source-manifest policy; domain tests check identity,
 relationship, invitation, message, and session invariants. Android lint treats warnings as
 errors except deliberately reviewed SDK/dependency update notices. CI runs the
 host checks and builds; device tests currently run locally.

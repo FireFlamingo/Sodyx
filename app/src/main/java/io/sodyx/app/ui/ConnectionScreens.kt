@@ -34,7 +34,13 @@ import io.sodyx.app.ui.design.TextAction
 import io.sodyx.domain.DisplayAlias
 
 @Composable
-internal fun AddContactScreen(onBack: () -> Unit, onCreate: (DisplayAlias) -> Unit, busy: Boolean) {
+internal fun AddContactScreen(
+    onBack: () -> Unit,
+    onCreate: (DisplayAlias) -> Unit,
+    onInvite: () -> Unit,
+    onScan: () -> Unit,
+    busy: Boolean
+) {
     var alias by remember { mutableStateOf("") }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = SodyxSpace.Large)) {
         item {
@@ -44,12 +50,15 @@ internal fun AddContactScreen(onBack: () -> Unit, onCreate: (DisplayAlias) -> Un
             Copy("Create a local\nconnection.", style = SodyxType.Display)
             Spacer(Modifier.height(SodyxSpace.Large))
             Copy(
-                "Test aliases are stored in the app database. No invitation, QR code, camera, " +
-                    "network, or contact establishment is used.",
+                "Create a local one-time invitation or use the test connection seam. " +
+                    "Invitations are local prototypes; nothing is sent and camera scanning " +
+                    "is not connected.",
                 color = SodyxColor.Secondary
             )
             Spacer(Modifier.height(SodyxSpace.Wide))
             Eyebrow("LOCAL PROTOTYPE")
+            Action("Create one-time invitation", onInvite, enabled = !busy)
+            Action("Scan invitation", onScan, enabled = !busy)
             Spacer(Modifier.height(SodyxSpace.Normal))
             BasicTextField(
                 alias,
@@ -136,8 +145,8 @@ internal fun SettingsScreen(reducedMotion: Boolean, onMotion: (Boolean) -> Unit)
             Spacer(Modifier.height(SodyxSpace.Section))
             Copy(
                 "Local prototype data is stored unencrypted on this device. " +
-                    "No network transport, invitations, camera, or real contact " +
-                    "establishment is available yet.",
+                    "Invitations and QR representations are local prototypes. No network " +
+                    "transport or camera scanning is connected.",
                 color = SodyxColor.Secondary
             )
         }

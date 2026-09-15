@@ -35,7 +35,8 @@ but the Phase 2 model itself is not a security boundary. Message and envelope
 references are caller-supplied wrappers. Standalone models do not enforce
 uniqueness for message or envelope IDs.
 
-Invitations currently represent local intent with an owner, offered pairwise
+The following is Phase 2 historical behavior; it predates the Phase 4 local
+invitation repository. In that model, invitations represent local intent with an owner, offered pairwise
 identity, timestamps, and an expiry check. Validity is the half-open interval
 `[createdAt, expiresAt)`. Invitations reserve no uniqueness and have no redeemed or
 consumed state. They contain no redeemable token, QR encoding, camera flow, or
@@ -44,3 +45,8 @@ session; an envelope reference is only a local association between message,
 session, and caller-supplied envelope ID. It contains no plaintext fields or route
 choices. There is no cryptography, transport, serialization, or secure envelope
 implementation yet.
+
+Phase 4 invitation redemption may create a relationship before any session
+exists. It does not activate a transport session, prove peer identity, or alter
+the Phase 2 session transition rules. A relationship can therefore exist with
+no active session.

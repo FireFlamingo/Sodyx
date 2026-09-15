@@ -87,6 +87,13 @@ internal fun ConversationList(
                     }
                     Column(Modifier.weight(1f)) {
                         Copy(row.alias.value, style = SodyxType.Name)
+                        if (row.peerPseudonym.isNotBlank()) {
+                            Copy(
+                                "PX-${row.peerPseudonym.replace("-", "").take(8).uppercase()}",
+                                style = SodyxType.Caption,
+                                color = SodyxColor.Secondary
+                            )
+                        }
                         Copy(
                             if (row.activeSessionId ==
                                 null
@@ -124,6 +131,13 @@ internal fun ConversationScreen(
             IconAction("Back to conversations", Symbol.Back, onBack)
             Column(Modifier.weight(1f).padding(SodyxSpace.Small)) {
                 Copy(row?.alias?.value.orEmpty(), style = SodyxType.Name)
+                row?.peerPseudonym?.takeIf { it.isNotBlank() }?.let {
+                    Copy(
+                        "PX-${it.replace("-", "").take(8).uppercase()}",
+                        style = SodyxType.Caption,
+                        color = SodyxColor.Secondary
+                    )
+                }
                 Copy(
                     "Local session · stored unencrypted",
                     style = SodyxType.Caption,

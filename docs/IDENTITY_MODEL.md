@@ -25,3 +25,15 @@ returned list cannot mutate the aggregate. Adding a relationship returns a new
 aggregate; callers must replace their old reference to retain it. The model does not
 erase stale snapshots, persist data, manage secure keys, encode wire messages, or
 guarantee identity uniqueness beyond the checks described above.
+
+## Phase 4 invitation boundary
+
+Phase 4 pseudonyms are locally generated, relationship-scoped references. They
+are not global identities, public usernames, credentials, keys, phone numbers,
+email addresses, or searchable handles. `DisplayAlias` remains a cosmetic local
+label and does not verify or identify a person.
+
+An imported invitation can create a local relationship, but it does not prove
+that the payload came from a claimed person. The versioned payload has no
+authenticity or confidentiality protection; syntactically valid tampering cannot
+be detected. See [invitation lifecycle](INVITATION_LIFECYCLE.md).

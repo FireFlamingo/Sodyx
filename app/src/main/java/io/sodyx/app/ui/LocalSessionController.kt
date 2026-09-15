@@ -3,11 +3,14 @@ package io.sodyx.app.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.sodyx.app.data.InvitationRow
 import io.sodyx.app.data.MessageRow
+import io.sodyx.app.data.RedemptionResult
 import io.sodyx.app.data.RelationshipRow
 import io.sodyx.app.data.SessionRow
 import io.sodyx.app.data.SodyxRepository
 import io.sodyx.domain.DisplayAlias
+import java.lang.System.currentTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +26,9 @@ internal data class LocalSessionUiState(
     val draft: String = "",
     val error: String? = null,
     val busy: Boolean = false,
-    val reducedMotion: Boolean = false
+    val reducedMotion: Boolean = false,
+    val invitations: List<InvitationRow> = emptyList(),
+    val invitationResult: RedemptionResult? = null
 )
 
 internal class LocalSessionController(
@@ -43,6 +48,10 @@ internal class LocalSessionController(
         state = state.copy(reducedMotion = value)
     }
 
+    fun clearInvitationResult() {
+        state = state.copy(invitationResult = null)
+    }
+
     fun refresh() {
         if (state.busy) {
             refreshQueued = true
@@ -54,15 +63,40 @@ internal class LocalSessionController(
             val selected = rows.firstOrNull { it.id == selectedId }
             val active = selected?.let { repository.activeSession(it.id) }
             val messages = active?.let { repository.loadMessages(it.id) }.orEmpty()
-            RefreshResult(rows, selected, active, messages)
+            RefreshResult(rows, selected, active, messages, repository.listInvitations())
         }) { result ->
             state =
                 state.copy(
                     relationships = result.rows,
                     selected = result.selected,
                     session = result.session,
-                    messages = result.messages
+                    messages = result.messages,
+                    invitations = result.invitations
                 )
+        }
+    }
+
+    fun createInvitation(onCreated: () -> Unit) {
+        runExclusive("Could not create the local invitation.", {
+            repository.createInvitation(currentTimeMillis())
+        }) { invitation ->
+            state = state.copy(invitations = state.invitations + invitation)
+            onCreated()
+        }
+    }
+
+    fun redeemInvitation(
+        payload: String,
+        alias: DisplayAlias,
+        onResult: (RedemptionResult) -> Unit
+    ) {
+        if (state.busy) return
+        runExclusive("Could not use this local invitation.", {
+            repository.redeemInvitation(payload, alias, currentTimeMillis())
+        }) { result ->
+            state = state.copy(invitationResult = result)
+            onResult(result)
+            refresh()
         }
     }
 
@@ -134,7 +168,8 @@ internal class LocalSessionController(
         val rows: List<RelationshipRow>,
         val selected: RelationshipRow?,
         val session: SessionRow?,
-        val messages: List<MessageRow>
+        val messages: List<MessageRow>,
+        val invitations: List<InvitationRow>
     )
 
     private fun <T> runExclusive(message: String, work: () -> T, apply: (T) -> Unit) {

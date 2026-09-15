@@ -17,12 +17,14 @@ queries, row mapping, and conversion to the immutable Phase 2 values. UI code
 does not hold a database handle or construct SQL. The domain module remains
 Android-free; persistence is an app-side adapter around it.
 
-The schema contains five tables: `local_identity`, `pairwise_identities`,
-`relationships`, `sessions`, and `messages`. Relationship listing uses explicit
+The current schema contains six tables: `local_identity`, `pairwise_identities`,
+`relationships`, `sessions`, `messages`, and `invitations`. Relationship listing uses explicit
 SQLite `rowid` order; the repository does not expose a session list, and message
 listing uses the monotonic `sequence` column.
-There are no persisted invitation rows. The repository does not create a public identity, keys, redeemable invitations,
-transport envelopes, camera flow, or network route. The [identity model](IDENTITY_MODEL.md)
+The Phase 3 baseline had no persisted invitation rows. Phase 4 adds the local
+invitation rows described below. The repository does not create a public identity,
+keys, network redeemable invitations, transport envelopes, camera flow, or
+network route. The [identity model](IDENTITY_MODEL.md)
 and [session lifecycle](SESSION_LIFECYCLE.md) remain authoritative for domain
 meaning and allowed transitions.
 
@@ -39,6 +41,18 @@ message sequence only.
 The schema has a partial unique index allowing at most one `ACTIVE` session per
 relationship. This is a Phase 3 repository product choice; the pure Phase 2
 model permits multiple session values for one relationship.
+
+Phase 4 adds SQLite-persisted local invitation rows. Each row stores the
+versioned payload fields (`id`, `token`, and relationship-scoped `pseudonym`),
+creation and expiry instants, direction, redemption state, optional redemption
+time, and optional relationship linkage. The valid interval is
+`[created, expires)`.
+Redemption and relationship creation occur in one transaction with a guarded
+single-winner update, so one local database cannot create two relationships from
+one invitation. This guarantee has no issuer synchronization and does not
+extend across separate databases or installations. Invitation payloads have no
+authenticity or confidentiality; syntactically valid tampering cannot be
+detected.
 
 ## Deletion and session ending
 
