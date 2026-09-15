@@ -36,6 +36,13 @@ usernames, camera permission or camera scanning, network transport,
 cryptography, key exchange, or remote contact establishment. See [invitation
 lifecycle](docs/INVITATION_LIFECYCLE.md) and [the local invitation decision](docs/decisions/0002-local-invitations.md).
 
+**Phase 5:** protocol research is complete, but no cryptographic implementation
+was selected. Current libsignal is the leading technical candidate; adoption is
+blocked on product-license compatibility, exact Android artifact/API validation,
+native packaging, and two-device protocol tests. See the [Phase 5 security
+decision](docs/SECURITY_DECISIONS.md). Phase 6 must not begin until those gates
+are resolved and a later decision explicitly selects an implementation.
+
 On a fresh install the database is empty. Create a test connection, open it, start
 a local session explicitly, and save messages locally as plaintext. Ending a
 session logically deletes its stored messages while preserving the relationship
