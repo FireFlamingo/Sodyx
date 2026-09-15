@@ -36,16 +36,23 @@ usernames, camera permission or camera scanning, network transport,
 cryptography, key exchange, or remote contact establishment. See [invitation
 lifecycle](docs/INVITATION_LIFECYCLE.md) and [the local invitation decision](docs/decisions/0002-local-invitations.md).
 
-**Phase 5:** protocol research is complete, but no cryptographic implementation
-was selected. Current libsignal is the leading technical candidate; adoption is
-blocked on the owner's product-license choice. Official artifact metadata has
-now been verified, and a minimal API compile smoke test passed: libsignal
-0.102.2 reports minSdk 23 and four Android ABIs, compatible with Sodyx's minSdk
-26. The all-ABI debug package is 1.05 GB and contains testing native libraries;
-ABI splits, production packaging, library-state, runtime, and two-device
-protocol tests remain outstanding. See the [Phase 5 security
-decision](docs/SECURITY_DECISIONS.md). Phase 6 must not begin until those gates
-are resolved and a later decision explicitly selects an implementation.
+**Phase 5:** protocol research is complete and libsignal 0.102.2 is selected
+for Phase 6 under an AGPL-compatible Sodyx project and distribution model. The
+implementation will use the exact pins
+`org.signal:libsignal-android:0.102.2` and
+`org.signal:libsignal-client:0.102.2` behind a narrow Sodyx adapter. Signal
+states that libsignal is intended for its own use and does not promise a stable
+general-purpose external API, so the exact pin is deliberate and API churn is
+an explicit maintenance gate. Official artifact metadata has been verified,
+and a minimal API compile smoke test passed: libsignal 0.102.2 reports minSdk
+23 and four Android ABIs, compatible with Sodyx's minSdk 26. The all-ABI debug
+package is 1.05 GB and contains testing native libraries; ABI splits,
+production packaging, durable stores, runtime, and two-device protocol tests
+remain outstanding. No crypto dependency or production crypto code has been
+added and Phase 6 has not started. See the [Phase 5 security
+decision](docs/SECURITY_DECISIONS.md). Sodyx is licensed under the [GNU AGPL
+version 3 only](LICENSE); qualified review of the exact release obligations
+remains required before distribution.
 
 On a fresh install the database is empty. Create a test connection, open it, start
 a local session explicitly, and save messages locally as plaintext. Ending a
@@ -126,3 +133,9 @@ for Phase 1 tokens, typography, interactions, accessibility, and font licensing;
 Phase 3 screens read local repository state where implemented instead of using
 Phase 1-only fixtures. See [local persistence](docs/LOCAL_PERSISTENCE.md) for
 repository and deletion boundaries.
+
+## License
+
+Unless otherwise noted, Sodyx is licensed under the GNU Affero General Public
+License version 3 only (`AGPL-3.0-only`). See [LICENSE](LICENSE). Bundled
+third-party components retain their own licenses and notices.
