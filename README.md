@@ -38,8 +38,12 @@ lifecycle](docs/INVITATION_LIFECYCLE.md) and [the local invitation decision](doc
 
 **Phase 5:** protocol research is complete, but no cryptographic implementation
 was selected. Current libsignal is the leading technical candidate; adoption is
-blocked on product-license compatibility, exact Android artifact/API validation,
-native packaging, and two-device protocol tests. See the [Phase 5 security
+blocked on the owner's product-license choice. Official artifact metadata has
+now been verified, and a minimal API compile smoke test passed: libsignal
+0.102.2 reports minSdk 23 and four Android ABIs, compatible with Sodyx's minSdk
+26. The all-ABI debug package is 1.05 GB and contains testing native libraries;
+ABI splits, production packaging, library-state, runtime, and two-device
+protocol tests remain outstanding. See the [Phase 5 security
 decision](docs/SECURITY_DECISIONS.md). Phase 6 must not begin until those gates
 are resolved and a later decision explicitly selects an implementation.
 
