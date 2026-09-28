@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      Sodyx has no network endpoint yet. Keep the default restrictive so a
+      future client cannot silently add cleartext transport or user-installed
+      trust anchors while an endpoint is being designed.
+    -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

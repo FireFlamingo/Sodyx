@@ -1,0 +1,14 @@
+{
+  "name": "sodyx-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Opaque-envelope mailbox relay prototype for Sodyx",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "test": "node --test"
+  }
+}

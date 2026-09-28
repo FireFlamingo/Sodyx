@@ -31,12 +31,18 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
         compose = true
+    }
+
+    packaging {
+        jniLibs.excludes += setOf("**/libsignal_jni_testing.so")
+        resources.excludes += setOf("libsignal_jni*.dylib", "signal_jni*.dll")
     }
 
     lint {
@@ -70,9 +76,12 @@ kotlin {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core)
     implementation(project(":domain"))
+    implementation(project(":security"))
+    implementation(project(":framing"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.foundation)
