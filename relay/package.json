@@ -5,7 +5,7 @@
   "description": "Opaque-envelope mailbox relay prototype for Sodyx",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.17"
   },
   "scripts": {
     "start": "node src/index.mjs",

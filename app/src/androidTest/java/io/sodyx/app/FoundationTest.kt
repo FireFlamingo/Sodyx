@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,8 +34,7 @@ class FoundationTest {
             context.packageName,
             PackageManager.GET_PERMISSIONS
         )
-        // AndroidX may contribute an app-private signature permission; no Internet access is granted.
-        assertFalse(info.requestedPermissions.orEmpty().contains("android.permission.INTERNET"))
+        assertTrue(info.requestedPermissions.orEmpty().contains("android.permission.INTERNET"))
         assertEquals(0, context.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
         assertFalse(NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted)
     }

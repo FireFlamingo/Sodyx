@@ -1,4 +1,4 @@
-name: Android foundation and domain model
+name: Sodyx core verification
 
 on:
   push:
@@ -31,4 +31,16 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
       - name: Check formatting, domain and app tests, Android lint, and both APK variants
-        run: ./gradlew spotlessCheck :domain:test testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease --console=plain
+        run: ./gradlew spotlessCheck :domain:test :security:testDebugUnitTest :app:testDebugUnitTest lintDebug lintRelease assembleDebug assembleRelease --console=plain --max-workers=1
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Verify relay capabilities, bounds, expiry, revocation, and persistence
+        run: npm --prefix relay test

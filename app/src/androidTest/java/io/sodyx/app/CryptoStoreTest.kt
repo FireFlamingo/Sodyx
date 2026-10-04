@@ -31,10 +31,27 @@ class CryptoStoreTest {
                 transaction.saveLocalAccount(LocalAccountState(secret, 42))
                 transaction.saveSession(peer, "ratchet-state".encodeToByteArray())
                 transaction.saveKyberPreKey(7, "kyber-key".encodeToByteArray())
+                store.putSecret("relay-retrieval", byteArrayOf(9, 8, 7))
+                store.saveMessage(
+                    "message-1",
+                    "session-1",
+                    true,
+                    "hello".encodeToByteArray(),
+                    byteArrayOf(1, 2, 3),
+                    1_700_000_000_000L
+                )
             }
             assertThrows(IllegalStateException::class.java) {
                 store.transaction { transaction ->
                     transaction.saveSession(peer, "rolled-back".encodeToByteArray())
+                    store.saveMessage(
+                        "message-2",
+                        "session-1",
+                        true,
+                        "rollback".encodeToByteArray(),
+                        byteArrayOf(4),
+                        1_700_000_000_001L
+                    )
                     error("abort transaction")
                 }
             }
@@ -67,6 +84,13 @@ class CryptoStoreTest {
                         assertTrue(cursor.moveToFirst())
                         assertFalse(cursor.getBlob(0).contentEquals(secret))
                     }
+                    raw.rawQuery("SELECT body FROM message_records WHERE id = 'message-1'", null)
+                        .use { cursor ->
+                            assertTrue(cursor.moveToFirst())
+                            assertFalse(
+                                cursor.getBlob(0).contentEquals("hello".encodeToByteArray())
+                            )
+                        }
                 }
             store.close()
 
@@ -82,6 +106,12 @@ class CryptoStoreTest {
                         KyberPreKeyUse.REUSED,
                         transaction.markKyberPreKeyUsed(7, byteArrayOf(1))
                     )
+                    assertArrayEquals(byteArrayOf(9, 8, 7), reopened.secret("relay-retrieval"))
+                    assertFalse(reopened.hasMessage("message-2"))
+                    val messages = reopened.messages("session-1")
+                    assertEquals(1, messages.size)
+                    assertArrayEquals("hello".encodeToByteArray(), messages.single().plaintext)
+                    assertArrayEquals(byteArrayOf(1, 2, 3), messages.single().wireEnvelope)
                 }
                 reopened.destroy()
                 assertFalse(context.getDatabasePath(databaseName).exists())

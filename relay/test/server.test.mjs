@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { createRelay } from "../src/server.mjs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const activeRelays = [];
 
 afterEach(async () => {
   await Promise.all(activeRelays.splice(0).map(({ server, dispose }) => {
-    dispose();
-    return new Promise((resolve) => server.close(resolve));
+    return new Promise((resolve) => server.close(resolve)).then(dispose);
   }));
 });
 
@@ -153,4 +155,67 @@ test("bounds global mailbox and envelope memory", async () => {
     body: JSON.stringify({ envelope: "Ag" }),
   });
   assert.equal(afterDelete.response.status, 201);
+});
+
+test("retrieval owner revokes a mailbox and both capabilities", async () => {
+  const url = await startRelay();
+  const mailbox = await createMailbox(url);
+  const wrongScope = await json(url, "/v1/mailboxes", {
+    method: "DELETE", headers: { authorization: `Bearer ${mailbox.deliveryCapability}` },
+  });
+  assert.equal(wrongScope.response.status, 404);
+  const revoked = await json(url, "/v1/mailboxes", {
+    method: "DELETE", headers: { authorization: `Bearer ${mailbox.retrievalCapability}` },
+  });
+  assert.equal(revoked.response.status, 204);
+  const delivery = await json(url, "/v1/envelopes", {
+    method: "POST", headers: { authorization: `Bearer ${mailbox.deliveryCapability}` },
+    body: JSON.stringify({ envelope: "AA" }),
+  });
+  assert.equal(delivery.response.status, 404);
+  const retrieval = await json(url, "/v1/envelopes", {
+    headers: { authorization: `Bearer ${mailbox.retrievalCapability}` },
+  });
+  assert.equal(retrieval.response.status, 404);
+});
+
+test("persistent relay survives restart without storing bearer capabilities", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "sodyx-relay-test-"));
+  const path = join(directory, "relay.db");
+  const closeLatest = async () => {
+    const relay = activeRelays.pop();
+    if (relay) { await new Promise((resolve) => relay.server.close(resolve)); relay.dispose(); }
+  };
+  try {
+    let url = await startRelay({ storagePath: path });
+    const mailbox = await createMailbox(url);
+    const inserted = await json(url, "/v1/envelopes", {
+      method: "POST", headers: { authorization: `Bearer ${mailbox.deliveryCapability}` },
+      body: JSON.stringify({ envelope: "AAECAw" }),
+    });
+    assert.equal(inserted.response.status, 201);
+    await closeLatest();
+    const disk = readFileSync(path);
+    assert.equal(disk.includes(Buffer.from(mailbox.deliveryCapability)), false);
+    assert.equal(disk.includes(Buffer.from(mailbox.retrievalCapability)), false);
+    url = await startRelay({ storagePath: path });
+    const listed = await json(url, "/v1/envelopes", {
+      headers: { authorization: `Bearer ${mailbox.retrievalCapability}` },
+    });
+    assert.deepEqual(listed.body.envelopes, [{ id: inserted.body.id, envelope: "AAECAw" }]);
+    await json(url, "/v1/mailboxes", {
+      method: "DELETE", headers: { authorization: `Bearer ${mailbox.retrievalCapability}` },
+    });
+    await closeLatest();
+    url = await startRelay({ storagePath: path });
+    const gone = await json(url, "/v1/envelopes", {
+      headers: { authorization: `Bearer ${mailbox.retrievalCapability}` },
+    });
+    assert.equal(gone.response.status, 404);
+  } finally {
+    await closeLatest();
+    if (!resolve(directory).startsWith(resolve(tmpdir()) + "\\") &&
+        !resolve(directory).startsWith(resolve(tmpdir()) + "/")) throw new Error("Unexpected test directory");
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

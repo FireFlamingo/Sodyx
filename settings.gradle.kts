@@ -23,4 +23,3 @@ rootProject.name = "Sodyx"
 include(":app")
 include(":domain")
 include(":security")
-include(":framing")

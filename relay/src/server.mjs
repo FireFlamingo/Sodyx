@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
+import { RelayPersistence } from "./persistence.mjs";
 
 export const DEFAULTS = Object.freeze({
   maxEnvelopeBytes: 256 * 1024,
@@ -20,6 +21,8 @@ const BASE64URL = /^[A-Za-z0-9_-]+$/;
 function opaqueToken(byteLength) {
   return randomBytes(byteLength).toString("base64url");
 }
+
+function capabilityHash(value) { return createHash("sha256").update(value).digest("hex"); }
 
 function isBase64Url(value) {
   return typeof value === "string" && value.length > 0 && BASE64URL.test(value);
@@ -90,12 +93,14 @@ function equalToken(left, right) {
  */
 export function createRelay(options = {}) {
   const config = { ...DEFAULTS, ...options };
-  const mailboxes = new Map();
-  let totalEnvelopeBytes = 0;
+  const persistence = config.storagePath ? new RelayPersistence(config.storagePath) : null;
+  const mailboxes = persistence?.load(config) ?? new Map();
+  let totalEnvelopeBytes = [...mailboxes.values()].reduce((sum, box) => sum + box.totalBytes, 0);
 
   function purgeExpired(now = Date.now()) {
     for (const [deliveryCapability, mailbox] of mailboxes) {
       if (mailbox.expiresAt <= now) {
+        persistence?.deleteMailbox(deliveryCapability);
         totalEnvelopeBytes -= mailbox.totalBytes;
         mailboxes.delete(deliveryCapability);
       }
@@ -111,19 +116,20 @@ export function createRelay(options = {}) {
   expiryTimer.unref();
 
   function findMailbox(capability, scope) {
+    const hash = capabilityHash(capability);
     for (const [deliveryCapability, mailbox] of mailboxes) {
       const candidate = scope === "deliver" ? deliveryCapability : mailbox.retrievalCapability;
-      if (equalToken(candidate, capability)) return { deliveryCapability, mailbox };
+      if (equalToken(candidate, hash)) return { deliveryCapability, mailbox };
     }
     return null;
   }
 
   async function handler(request, response) {
-    purgeExpired();
-    const url = new URL(request.url, "http://relay.invalid");
     const capability = parseAuthorization(request);
 
     try {
+      purgeExpired();
+      const url = new URL(request.url, "http://relay.invalid");
       if (request.method === "POST" && url.pathname === "/v1/mailboxes") {
         const body = await readJson(request, 1024);
         const ttlSeconds = body.ttlSeconds ?? config.defaultTtlSeconds;
@@ -136,8 +142,11 @@ export function createRelay(options = {}) {
         const deliveryCapability = opaqueToken(CAPABILITY_BYTES);
         const retrievalCapability = opaqueToken(CAPABILITY_BYTES);
         const expiresAt = Date.now() + ttlSeconds * 1000;
-        mailboxes.set(deliveryCapability, {
-          retrievalCapability,
+        const deliveryHash = capabilityHash(deliveryCapability);
+        const retrievalHash = capabilityHash(retrievalCapability);
+        persistence?.create(deliveryHash, retrievalHash, expiresAt);
+        mailboxes.set(deliveryHash, {
+          retrievalCapability: retrievalHash,
           expiresAt,
           totalBytes: 0,
           envelopes: new Map(),
@@ -155,6 +164,9 @@ export function createRelay(options = {}) {
           return sendJson(response, 400, { error: "invalid_request" });
         }
         const mailbox = found.mailbox;
+        if (mailbox.expiresAt <= Date.now() || !mailboxes.has(found.deliveryCapability)) {
+          return sendJson(response, 404, { error: "not_found" });
+        }
         if (
           mailbox.envelopes.size >= config.maxMailboxItems ||
           mailbox.totalBytes + envelope.length > config.maxMailboxBytes ||
@@ -163,7 +175,9 @@ export function createRelay(options = {}) {
           return sendJson(response, 507, { error: "mailbox_full" });
         }
         const id = opaqueToken(MESSAGE_ID_BYTES);
-        mailbox.envelopes.set(id, { envelope: envelope.toString("base64url"), byteLength: envelope.length });
+        const record = { envelope: envelope.toString("base64url"), byteLength: envelope.length };
+        persistence?.add(found.deliveryCapability, id, record);
+        mailbox.envelopes.set(id, record);
         mailbox.totalBytes += envelope.length;
         totalEnvelopeBytes += envelope.length;
         return sendJson(response, 201, { id });
@@ -177,6 +191,16 @@ export function createRelay(options = {}) {
         return sendJson(response, 200, { envelopes });
       }
 
+      if (request.method === "DELETE" && url.pathname === "/v1/mailboxes") {
+        if (!capability) return sendJson(response, 401, { error: "unauthorized" });
+        const found = findMailbox(capability, "retrieve");
+        if (!found) return sendJson(response, 404, { error: "not_found" });
+        persistence?.deleteMailbox(found.deliveryCapability);
+        totalEnvelopeBytes -= found.mailbox.totalBytes;
+        mailboxes.delete(found.deliveryCapability);
+        return sendEmpty(response, 204);
+      }
+
       const match = /^\/v1\/envelopes\/([A-Za-z0-9_-]{22})$/.exec(url.pathname);
       if (request.method === "DELETE" && match) {
         if (!capability) return sendJson(response, 401, { error: "unauthorized" });
@@ -184,6 +208,7 @@ export function createRelay(options = {}) {
         if (!found) return sendJson(response, 404, { error: "not_found" });
         const record = found.mailbox.envelopes.get(match[1]);
         if (!record) return sendJson(response, 404, { error: "not_found" });
+        persistence?.deleteMessage(found.deliveryCapability, match[1]);
         found.mailbox.envelopes.delete(match[1]);
         found.mailbox.totalBytes -= record.byteLength;
         totalEnvelopeBytes -= record.byteLength;
@@ -203,6 +228,6 @@ export function createRelay(options = {}) {
   return {
     server,
     purgeExpired,
-    dispose: () => clearInterval(expiryTimer),
+    dispose: () => { clearInterval(expiryTimer); persistence?.close(); },
   };
 }

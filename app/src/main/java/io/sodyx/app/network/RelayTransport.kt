@@ -6,6 +6,11 @@ import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Client boundary for the Phase 8 relay.
@@ -23,6 +28,8 @@ interface RelayTransport {
 
     /** Acknowledges only an already retrieved ciphertext record. A missing/expired record is idempotent. */
     suspend fun acknowledge(source: RelayRetrievalMailbox, id: RelayDeliveryId)
+
+    suspend fun revoke(source: RelayRetrievalMailbox)
 }
 
 /** Delivery and retrieval capabilities are separate so callers cannot use one in the wrong direction. */
@@ -156,8 +163,9 @@ internal class HttpRelayTransport(
             CAPABILITY_LENGTH
         )
         val expiresAt = RelayJson.requiredLong(response.body, "expiresAt")
-        require(expiresAt > clock.currentTimeMillis()) {
-            "Relay returned an already expired mailbox."
+        val now = clock.currentTimeMillis()
+        require(expiresAt in (now + 1)..(now + ttlSeconds * 1000L + 60_000L)) {
+            "Relay returned an invalid mailbox lifetime."
         }
         return RelayMailboxProvision(
             delivery = RelayDeliveryMailbox(delivery, expiresAt),
@@ -213,6 +221,13 @@ internal class HttpRelayTransport(
         }
     }
 
+    override suspend fun revoke(source: RelayRetrievalMailbox) {
+        val response = execute(
+            RelayHttpRequest.delete("/v1/mailboxes", source.authorizationValue())
+        )
+        if (response.status !in setOf(204, 404)) requireStatus(response, 204)
+    }
+
     private fun requireUsable(expiresAtEpochMillis: Long) {
         check(clock.currentTimeMillis() < expiresAtEpochMillis) {
             "Mailbox capability has expired locally."
@@ -245,6 +260,8 @@ internal data class RelayHttpRequest(
     val body: String?,
     val authorizationCapability: String?
 ) {
+    override fun toString(): String =
+        "RelayHttpRequest(method=$method, path=$path, payload=<redacted>)"
     init {
         require(path.startsWith('/') && !path.contains('?') && !path.contains('#')) {
             "Invalid relay path."
@@ -264,6 +281,7 @@ internal data class RelayHttpRequest(
 }
 
 internal data class RelayHttpResponse(val status: Int, val body: String) {
+    override fun toString(): String = "RelayHttpResponse(status=$status, body=<redacted>)"
     fun isTransient(): Boolean = status == 429 || status in 500..599
 }
 
@@ -310,46 +328,56 @@ private object RelayJson {
     }
 
     fun requiredLong(json: String, name: String): Long {
-        val pattern = Regex("\\\"${Regex.escape(name)}\\\"\\s*:\\s*(\\d+)")
-        val values = pattern.findAll(json).map { it.groupValues[1] }.toList()
-        if (values.size != 1) throw RelayProtocolException("Relay returned an invalid $name.")
-        return values.single().toLongOrNull()
+        val value = objectResponse(json)[name] as? JsonPrimitive
+        return value?.takeIf { !it.isString }?.longOrNull
             ?: throw RelayProtocolException("Relay returned an invalid $name.")
     }
 
     fun envelopes(json: String): List<RelayJsonEnvelope> {
-        val arrayMatch =
-            Regex("\\\"envelopes\\\"\\s*:\\s*\\[(.*)]\\s*}", RegexOption.DOT_MATCHES_ALL)
-                .matchEntire(json)
-                ?: throw RelayProtocolException("Relay returned an invalid envelopes response.")
-        val content = arrayMatch.groupValues[1].trim()
-        if (content.isEmpty()) return emptyList()
-        val itemPattern = Regex(
-            "\\{\\s*\\\"id\\\"\\s*:\\s*\\\"([A-Za-z0-9_-]{22})\\\"\\s*,\\s*" +
-                "\\\"envelope\\\"\\s*:\\s*\\\"([A-Za-z0-9_-]+)\\\"\\s*}"
-        )
-        val items = itemPattern.findAll(content).map {
-            RelayJsonEnvelope(it.groupValues[1], it.groupValues[2])
-        }.toList()
-        if (items.isEmpty() || items.joinToString(",") {
-                "{\"id\":\"${it.id}\",\"envelope\":\"${it.envelope}\"}"
-            }.replace(Regex("\\s"), "") != content.replace(Regex("\\s"), "")
-        ) {
+        val root = objectResponse(json)
+        val array = root["envelopes"] as? JsonArray
+            ?: throw RelayProtocolException("Relay returned an invalid envelopes response.")
+        if (root.keys != setOf("envelopes") || array.size > MAX_RECEIVE_ENVELOPES) {
             throw RelayProtocolException("Relay returned an invalid envelopes response.")
         }
-        if (items.size >
-            MAX_RECEIVE_ENVELOPES
-        ) {
-            throw RelayProtocolException("Relay returned too many envelopes.")
+        val items = array.map { element ->
+            val item = element as? JsonObject
+                ?: throw RelayProtocolException("Relay returned an invalid envelope.")
+            if (item.keys != setOf("id", "envelope")) {
+                throw RelayProtocolException("Relay returned an invalid envelope.")
+            }
+            val id = requiredToken(item.toString(), "id", DELIVERY_ID_LENGTH)
+            val envelope = requiredString(item.toString(), "envelope")
+            if (envelope.length > 349_526 || !tokenPattern.matches(envelope)) {
+                throw RelayProtocolException("Relay returned an invalid envelope encoding.")
+            }
+            val decoded = try {
+                Base64.getUrlDecoder().decode(envelope)
+            } catch (_: IllegalArgumentException) {
+                throw RelayProtocolException("Relay returned an invalid envelope encoding.")
+            }
+            if (Base64.getUrlEncoder().withoutPadding().encodeToString(decoded) != envelope) {
+                throw RelayProtocolException("Relay returned an invalid envelope encoding.")
+            }
+            RelayJsonEnvelope(id, envelope)
+        }
+        if (items.map { it.id }.distinct().size != items.size) {
+            throw RelayProtocolException("Relay returned duplicate envelope identifiers.")
         }
         return items
     }
 
     private fun requiredString(json: String, name: String): String {
-        val pattern = Regex("\\\"${Regex.escape(name)}\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"")
-        val values = pattern.findAll(json).map { it.groupValues[1] }.toList()
-        if (values.size != 1) throw RelayProtocolException("Relay returned an invalid $name.")
-        return values.single()
+        val value = objectResponse(json)[name] as? JsonPrimitive
+        return value?.takeIf { it.isString }?.content
+            ?: throw RelayProtocolException("Relay returned an invalid $name.")
+    }
+
+    private fun objectResponse(json: String): JsonObject = try {
+        Json.parseToJsonElement(json) as? JsonObject
+            ?: throw RelayProtocolException("Relay returned invalid JSON.")
+    } catch (error: IllegalArgumentException) {
+        throw RelayProtocolException("Relay returned invalid JSON.", error)
     }
 }
 

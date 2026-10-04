@@ -12,8 +12,14 @@ android {
         applicationId = "io.sodyx.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.4.0"
+        ndk {
+            val requested = providers.gradleProperty("sodyx.abi")
+                .orElse("arm64-v8a,x86_64").get().split(',')
+            require(requested.all { it in setOf("arm64-v8a", "x86_64", "armeabi-v7a", "x86") })
+            abiFilters += requested
+        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -54,7 +60,9 @@ android {
                 "GradleDependency",
                 "AndroidGradlePluginVersion",
                 "NewerVersionAvailable",
-                "OldTargetApi"
+                "OldTargetApi",
+                // Single-ABI APKs are intentional; default builds include x86_64.
+                "ChromeOsAbiSupport"
             )
     }
 
@@ -78,10 +86,10 @@ kotlin {
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.zxing.core)
     implementation(project(":domain"))
     implementation(project(":security"))
-    implementation(project(":framing"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.foundation)

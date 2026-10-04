@@ -32,7 +32,7 @@ import javax.crypto.spec.GCMParameterSpec
  */
 class EncryptedProtocolStateStore(
     context: Context,
-    private val databaseName: String = DEFAULT_DATABASE_NAME,
+    private val databaseName: String,
     private val keyAlias: String = keyAliasFor(databaseName)
 ) : ProtocolStateStore,
     AutoCloseable {
@@ -44,6 +44,127 @@ class EncryptedProtocolStateStore(
     private val lock = Any()
     private val activeTransaction = ThreadLocal<TransactionContext?>()
     private var closed = false
+
+    /** Application secrets and message records share the ratchet transaction. */
+    fun putSecret(name: String, value: ByteArray) {
+        requireRecordId(name)
+        requireActiveTransaction()
+        database.insertWithOnConflict(
+            "app_secrets",
+            null,
+            values("name" to name, "payload" to encrypt(value, secretAad(name))),
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
+    fun secret(name: String): ByteArray? {
+        requireRecordId(name)
+        requireActiveTransaction()
+        return database.query(
+            "app_secrets",
+            arrayOf("payload"),
+            "name = ?",
+            arrayOf(name),
+            null,
+            null,
+            null
+        ).use { cursor ->
+            if (cursor.moveToFirst()) decrypt(cursor.getBlob(0), secretAad(name)) else null
+        }
+    }
+
+    fun saveMessage(
+        id: String,
+        sessionId: String,
+        senderLocal: Boolean,
+        plaintext: ByteArray,
+        wireEnvelope: ByteArray,
+        createdAtEpochMillis: Long
+    ) {
+        requireRecordId(id)
+        requireRecordId(sessionId)
+        require(plaintext.isNotEmpty() && plaintext.size <= MAX_MESSAGE_BYTES)
+        require(wireEnvelope.isNotEmpty() && wireEnvelope.size <= MAX_MESSAGE_BYTES)
+        require(createdAtEpochMillis >= 0)
+        requireActiveTransaction()
+        database.insertOrThrow(
+            "message_records",
+            null,
+            values(
+                "id" to id,
+                "session_id" to sessionId,
+                "sender_local" to if (senderLocal) 1 else 0,
+                "body" to encrypt(plaintext, messageAad(id, "body")),
+                "wire" to encrypt(wireEnvelope, messageAad(id, "wire")),
+                "delivered" to 0,
+                "created_at" to createdAtEpochMillis
+            )
+        )
+    }
+
+    fun hasMessage(id: String): Boolean {
+        requireRecordId(id)
+        requireActiveTransaction()
+        return database.rawQuery(
+            "SELECT 1 FROM message_records WHERE id = ?",
+            arrayOf(id)
+        ).use { it.moveToFirst() }
+    }
+
+    fun markDelivered(id: String) {
+        requireRecordId(id)
+        requireActiveTransaction()
+        database.execSQL("UPDATE message_records SET delivered = 1 WHERE id = ?", arrayOf(id))
+    }
+
+    fun messages(sessionId: String): List<StoredSecureMessage> {
+        requireRecordId(sessionId)
+        requireActiveTransaction()
+        return database.rawQuery(
+            "SELECT id, sender_local, body, wire, delivered, created_at FROM message_records " +
+                "WHERE session_id = ? ORDER BY sequence",
+            arrayOf(sessionId)
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0)
+                    add(
+                        StoredSecureMessage(
+                            id,
+                            sessionId,
+                            cursor.getInt(1) != 0,
+                            decrypt(cursor.getBlob(2), messageAad(id, "body")),
+                            decrypt(cursor.getBlob(3), messageAad(id, "wire")),
+                            cursor.getInt(4) != 0,
+                            cursor.getLong(5)
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteMessages(sessionId: String) {
+        requireRecordId(sessionId)
+        requireActiveTransaction()
+        database.delete("message_records", "session_id = ?", arrayOf(sessionId))
+    }
+
+    private fun requireActiveTransaction() {
+        check(activeTransaction.get() != null) {
+            "Message operations require a protocol transaction"
+        }
+    }
+
+    private fun requireRecordId(value: String) {
+        require(value.isNotBlank() && value.length <= 128 && value.none(Char::isISOControl))
+    }
+
+    private fun secretAad(name: String): ByteArray =
+        "app_secret\u0000$name".toByteArray(StandardCharsets.UTF_8)
+
+    private fun messageAad(id: String, column: String): ByteArray =
+        "message\u0000$id\u0000$column".toByteArray(StandardCharsets.UTF_8)
 
     override fun <T> transaction(block: (ProtocolStateTransaction) -> T): T = synchronized(lock) {
         ensureOpen()
@@ -74,24 +195,11 @@ class EncryptedProtocolStateStore(
      * decrypt it. Call this only for explicit account/session destruction.
      */
     fun destroy() = synchronized(lock) {
-        if (!closed) {
-            database.beginTransaction()
-            try {
-                database.delete("local_account", null, null)
-                database.delete("peer_identities", null, null)
-                database.delete("sessions", null, null)
-                database.delete("prekeys", null, null)
-                database.delete("signed_prekeys", null, null)
-                database.delete("kyber_prekeys", null, null)
-                database.setTransactionSuccessful()
-            } finally {
-                database.endTransaction()
-            }
-            helper.close()
-            closed = true
-        }
-        applicationContext.deleteDatabase(databaseName)
+        helper.close()
+        closed = true
+        // Delete the wrapping key first. Cleanup of a closed tombstone must not reopen a database.
         keyStore().deleteEntry(keyAlias)
+        applicationContext.deleteDatabase(databaseName)
     }
 
     private fun ensureOpen() {
@@ -357,6 +465,7 @@ class EncryptedProtocolStateStore(
         pairs.forEach { (key, value) ->
             when (value) {
                 is Int -> put(key, value)
+                is Long -> put(key, value)
                 is String -> put(key, value)
                 is ByteArray -> put(key, value.copyOf())
                 else -> error("Unsupported SQLite value for $key")
@@ -394,17 +503,39 @@ class EncryptedProtocolStateStore(
             db.execSQL(
                 "CREATE TABLE kyber_prekey_uses (prekey_id INTEGER NOT NULL REFERENCES kyber_prekeys(id) ON DELETE CASCADE, base_key_hash BLOB NOT NULL, PRIMARY KEY(prekey_id, base_key_hash))"
             )
+            createApplicationTables(db)
         }
 
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int): Unit =
-            throw IllegalStateException(
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            require(oldVersion == 1 && newVersion == 2) {
                 "Unsupported protocol-state upgrade: $oldVersion to $newVersion"
+            }
+            createApplicationTables(db)
+        }
+
+        private fun createApplicationTables(db: SQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE app_secrets (name TEXT PRIMARY KEY NOT NULL, " +
+                    "payload BLOB NOT NULL)"
             )
+            db.execSQL(
+                "CREATE TABLE message_records (sequence INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "id TEXT UNIQUE NOT NULL, session_id TEXT NOT NULL, " +
+                    "sender_local INTEGER NOT NULL " +
+                    "CHECK(sender_local IN (0,1)), body BLOB NOT NULL, wire BLOB NOT NULL, " +
+                    "delivered INTEGER NOT NULL CHECK(delivered IN (0,1)), " +
+                    "created_at INTEGER NOT NULL)"
+            )
+            db.execSQL(
+                "CREATE INDEX message_records_session " +
+                    "ON message_records(session_id, sequence)"
+            )
+        }
     }
 
     private companion object {
-        const val DEFAULT_DATABASE_NAME = "sodyx-protocol-state.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
+        const val MAX_MESSAGE_BYTES = 262_144
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
         const val CIPHERTEXT_VERSION: Byte = 1
@@ -420,4 +551,17 @@ class EncryptedProtocolStateStore(
             return "io.sodyx.protocol.$digest"
         }
     }
+}
+
+class StoredSecureMessage(
+    val id: String,
+    val sessionId: String,
+    val senderLocal: Boolean,
+    val plaintext: ByteArray,
+    val wireEnvelope: ByteArray,
+    val delivered: Boolean,
+    val createdAtEpochMillis: Long
+) {
+    override fun toString(): String =
+        "StoredSecureMessage(senderLocal=$senderLocal, delivered=$delivered)"
 }

@@ -1,5 +1,6 @@
 package io.sodyx.app.network
 
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
@@ -11,7 +12,12 @@ internal class UrlConnectionRelayHttpExecutor : RelayHttpExecutor {
     override fun execute(endpoint: RelayEndpoint, request: RelayHttpRequest): RelayHttpResponse {
         val uri = URI(endpoint.baseUri.toString().trimEnd('/') + request.path)
         val connection = try {
-            (URL(uri.toString()).openConnection() as HttpURLConnection).apply {
+            URL(uri.toString()).openConnection() as HttpURLConnection
+        } catch (error: IOException) {
+            throw RelayNetworkException("Relay connection failed.", error)
+        }
+        return try {
+            connection.apply {
                 requestMethod = request.method
                 instanceFollowRedirects = false
                 connectTimeout = CONNECT_TIMEOUT_MILLIS
@@ -30,10 +36,6 @@ internal class UrlConnectionRelayHttpExecutor : RelayHttpExecutor {
                     outputStream.use { it.write(bytes) }
                 }
             }
-        } catch (error: IOException) {
-            throw RelayNetworkException("Relay connection failed.", error)
-        }
-        return try {
             val status = connection.responseCode
             val stream = if (status in 200..399) connection.inputStream else connection.errorStream
             RelayHttpResponse(
@@ -50,18 +52,22 @@ internal class UrlConnectionRelayHttpExecutor : RelayHttpExecutor {
     }
 
     private fun java.io.InputStream.readUtf8Bounded(maxBytes: Int): String {
-        val bytes = readBytes()
-        if (bytes.size >
-            maxBytes
-        ) {
-            throw RelayNetworkException("Relay response exceeds the configured limit.")
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val read = read(buffer)
+            if (read == -1) break
+            if (output.size().toLong() + read > maxBytes) {
+                throw RelayNetworkException("Relay response exceeds the configured limit.")
+            }
+            output.write(buffer, 0, read)
         }
-        return bytes.toString(StandardCharsets.UTF_8)
+        return output.toString(StandardCharsets.UTF_8.name())
     }
 
     private companion object {
         const val CONNECT_TIMEOUT_MILLIS = 10_000
         const val READ_TIMEOUT_MILLIS = 15_000
-        const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+        const val MAX_RESPONSE_BYTES = 12 * 1024 * 1024
     }
 }

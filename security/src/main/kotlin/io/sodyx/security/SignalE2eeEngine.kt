@@ -125,7 +125,7 @@ class SignalE2eeEngine(state: ProtocolStateStore, private val clock: Clock = Clo
     }
 
     /** Records a peer key only after the caller has verified it through a separate trusted channel. */
-    fun confirmVerifiedIdentity(peer: ProtocolAddress, serializedIdentityKey: ByteArray) =
+    fun confirmVerifiedIdentity(peer: ProtocolAddress, serializedIdentityKey: ByteArray): Unit =
         protocolStore.inTransaction {
             val address = peer.toSignalAddress()
             val existing = protocolStore.getIdentity(address)
@@ -133,6 +133,7 @@ class SignalE2eeEngine(state: ProtocolStateStore, private val clock: Clock = Clo
                 "An identity change requires explicit replacement."
             }
             protocolStore.saveIdentity(address, IdentityKey(serializedIdentityKey))
+            Unit
         }
 
     /** Establishes an outbound session only for a previously verified peer key. */
@@ -152,12 +153,18 @@ class SignalE2eeEngine(state: ProtocolStateStore, private val clock: Clock = Clo
 
     fun encrypt(peer: ProtocolAddress, plaintext: ByteArray): EncryptedMessage =
         protocolStore.inTransaction {
-            val encrypted = SessionCipher(
-                protocolStore,
-                selfAddress(),
-                peer.toSignalAddress()
-            ).encrypt(plaintext)
-            EncryptedMessage(encrypted.type, encrypted.serialize())
+            try {
+                val encrypted = SessionCipher(
+                    protocolStore,
+                    selfAddress(),
+                    peer.toSignalAddress()
+                ).encrypt(plaintext)
+                EncryptedMessage(encrypted.type, encrypted.serialize())
+            } catch (failure: NoSessionException) {
+                throw SignalFailure.MissingSession(failure)
+            } catch (failure: UntrustedIdentityException) {
+                throw SignalFailure.UntrustedIdentity(failure)
+            }
         }
 
     /**

@@ -3,6 +3,9 @@
 `EncryptedProtocolStateStore` is the Android persistence boundary for opaque
 libsignal serializations. It holds the local identity key pair, peer identity
 keys, ratchet sessions, one-time prekeys, signed prekeys, and Kyber prekeys.
+It also stores relay capability secrets and encrypted message records in the
+same SQLite transaction as ratchet advancement. Schema version 2 adds those
+tables to existing version 1 protocol stores.
 It does not define, parse, or construct protocol material; libsignal remains
 the cryptographic authority.
 

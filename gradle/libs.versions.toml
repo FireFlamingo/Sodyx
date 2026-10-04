@@ -11,6 +11,7 @@ coroutines = "1.8.1"
 zxing = "3.5.4"
 libsignal = "0.102.2"
 desugar = "2.1.5"
+kotlinx-json = "1.9.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
@@ -25,6 +26,7 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 libsignal-android = { module = "org.signal:libsignal-android", version.ref = "libsignal" }
 libsignal-client = { module = "org.signal:libsignal-client", version.ref = "libsignal" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -1,37 +1,27 @@
-# Protocol implementation status
+# Core protocol
 
-Sodyx uses `org.signal:libsignal-android:0.102.2` and
-`org.signal:libsignal-client:0.102.2` through the isolated `:security` module.
-There is no Sodyx key agreement, ratchet, or cipher. The app-owned
-`ProtocolStateStore` persists libsignal's opaque records; the Android
-implementation encrypts each record with AES-GCM under an Android Keystore key.
+Sodyx uses libsignal 0.102.2 through the isolated `:security` module. It implements no custom key agreement, ratchet, or cipher. Each connection has a fresh identity and independent protocol database; there is no public global account identifier.
 
-The public peer identity key must be verified through a separate trusted
-exchange before either `establishSession` or first prekey-message decryption.
-`confirmVerifiedIdentity` pins that key. An identity change requires a separate
-explicit replacement action, which deletes existing sessions for that peer.
-The Phase 4 invitation QR is still unauthenticated local simulation and must
-not be used as this verification step.
+## Contact setup
 
-Each relationship needs a distinct `EncryptedProtocolStateStore` database and
-therefore a distinct local libsignal identity key. A session's ratchet state is
-stored under a relationship-scoped peer address. Prekeys and session state are
-updated inside store transactions. The app must also persist outbound
-ciphertext, inbound replay decisions, and message state in the same durable
-transaction before connecting this engine to live delivery. The existing
-plaintext `messages` table does not meet that requirement.
+Both participants create a contact card. A versioned, bounded binary card contains public libsignal prekeys, a random pairwise address, a relay URL, a delivery capability, and expiry. The corresponding retrieval capability stays encrypted on its owner's phone.
 
-Current automated evidence covers two independent libsignal stores exchanging
-an initial prekey message and a reply, rejecting a replay and an altered
-message, and refusing unverified setup. Android instrumentation verifies that
-protocol records are encrypted on disk, survive restart, and roll back on a
-failed transaction. The relay sees only opaque bytes; it has no decryption key.
+The displayed verification code is SHA-256 over the complete canonical card. Comparing it through a separate trusted channel binds the identity key, prekeys, relay URL, capability, and expiry. Importing a card alone does not authenticate its owner. The UI requires an explicit comparison confirmation before `confirmVerifiedIdentity` pins the peer key and libsignal establishes the session. A paired card cannot silently replace another identity.
 
-The following remain required before Sodyx can claim endpoint encryption in
-the app: real peer bundle exchange and QR/fingerprint verification, atomic
-encrypted message and ratchet persistence, identity rotation and prekey
-exhaustion handling, process-death and two-device tests, release/runtime checks
-for every shipped ABI, session key destruction, and log review. Framing's
-current 1024-byte cell size is provisional and its visible ciphertext-length
-field still exposes exact serialized-envelope length; it is not a finished
-message-size protection layer.
+## Messages and persistence
+
+The wire wrapper contains a version, libsignal ciphertext type, and bounded ciphertext bytes. It exposes no alias, identity, contact ID, or plaintext. The relay receives base64url-encoded opaque wire bytes. Message length and timing are visible; size and traffic obfuscation are outside the core scope.
+
+For an outgoing message, one SQLite transaction advances libsignal state and saves the wire envelope and local message record. The local plaintext record is AES-GCM encrypted under Android Keystore. Network failure leaves the envelope queued; retry sends the same ciphertext rather than re-encrypting with rolled-back state.
+
+For an incoming message, one transaction authenticates/decrypts, advances the ratchet, and saves the encrypted local record. The relay is acknowledged after commit. A repeated relay ID is idempotent; libsignal rejects replayed ciphertext even under a new relay ID. Authentication and identity failures escape the transaction before handling, so failed operations roll back. Malformed and unauthentic ciphertext is discarded without displaying a message. Identity changes require new verified setup.
+
+Only a foreground conversation polls automatically. The app uses HTTPS, disallows redirects, bounds response bytes while reading, and retains no request or message logs. The debug build has a localhost-only cleartext exception for isolated ADB integration tests; release policy remains HTTPS-only.
+
+## Closure
+
+The registry first marks a connection closed, preventing future sends. The connection's database and Keystore wrapping key are then destroyed. Closed registry tombstones trigger cleanup on the next load, covering a crash during destruction. The app attempts to revoke its retrieval mailbox after local destruction; server expiry is the offline fallback. Peer copies and the peer's independent mailbox are not erased.
+
+## Evidence and limits
+
+Host tests exercise libsignal encryption/decryption, first-contact verification, replay/tampering, card parsing, wire bounds, and relay JSON. Device tests exercise Keystore persistence/rollback, actual native sessions across reopen, two-party queued delivery, corruption/replay, and UI pairing/closure. The live relay fixture uses the real HTTP client and server. Passing these tests is implementation evidence, not an independent security audit.

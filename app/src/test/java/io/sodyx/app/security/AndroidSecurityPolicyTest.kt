@@ -15,7 +15,12 @@ class AndroidSecurityPolicyTest {
     @Test
     fun manifestKeepsItsNarrowPublicSurface() {
         val manifest = parse(manifestFile)
-        assertEquals(0, manifest.getElementsByTagName("uses-permission").length)
+        val permissions = manifest.getElementsByTagName("uses-permission")
+        assertEquals(1, permissions.length)
+        assertEquals(
+            "android.permission.INTERNET",
+            permissions.item(0).attributes.getNamedItemNS(namespace, "name").nodeValue
+        )
         assertEquals(1, manifest.getElementsByTagName("activity").length)
 
         val activity = manifest.getElementsByTagName("activity").item(0)

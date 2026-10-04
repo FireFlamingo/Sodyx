@@ -16,8 +16,16 @@ class ManifestPolicyTest {
     }.newDocumentBuilder().parse(File(checkNotNull(System.getProperty("sodyx.mainManifest"))))
 
     @Test
-    fun foundationRequestsNoPermissions() {
-        assertEquals(0, manifest.getElementsByTagName("uses-permission").length)
+    fun requestsOnlyInternetPermission() {
+        val permissions = manifest.getElementsByTagName("uses-permission")
+        assertEquals(1, permissions.length)
+        assertEquals(
+            "android.permission.INTERNET",
+            permissions.item(0).attributes.getNamedItemNS(
+                "http://schemas.android.com/apk/res/android",
+                "name"
+            ).nodeValue
+        )
         assertEquals(0, manifest.getElementsByTagName("uses-permission-sdk-23").length)
     }
 
