@@ -2,6 +2,7 @@
   <h1>Sodyx</h1>
   <p>One-to-one messaging for Android.</p>
   <p>
+    <a href="#download">Download</a> ·
     <a href="#screenshots">Screenshots</a> ·
     <a href="#start-a-conversation">Getting started</a> ·
     <a href="#build">Build</a> ·
@@ -10,6 +11,16 @@
 </div>
 
 Sodyx sends encrypted text through a relay you host. Each connection has its own identity and encrypted local store. Pairing starts with an exchange of contact cards and a verification-code comparison.
+
+## Download
+
+**[Download Sodyx 0.4.0 for Android](https://github.com/FireFlamingo/Sodyx/releases/download/v0.4.0/sodyx-0.4.0-arm64-debug.apk)**
+
+Requires **Android 8.0 or newer** and an **ARM64** phone. This prerelease is a signed debug build with Android debugging enabled. Production signing and validation on physical phones remain pending.
+
+Open the downloaded APK on your phone. If Android asks, allow installation from the browser or file manager you used. Then follow [Start a conversation](#start-a-conversation) to connect to your HTTPS relay.
+
+[Release notes and SHA-256 checksum](https://github.com/FireFlamingo/Sodyx/releases/tag/v0.4.0)
 
 ## Screenshots
 
