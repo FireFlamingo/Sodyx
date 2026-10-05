@@ -8,6 +8,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import io.sodyx.app.data.CoreMessengerRepository
 import io.sodyx.app.security.SensitiveWindowPolicy
 import io.sodyx.app.ui.CoreMessengerApp
@@ -22,6 +23,15 @@ class MainActivity : ComponentActivity() {
         internal var coreRepositoryOverride: CoreMessengerRepository? = null
     }
     private val resumeGeneration = mutableIntStateOf(0)
+    private val foreground = mutableStateOf(false)
+    override fun onStart() {
+        super.onStart()
+        foreground.value = true
+    }
+    override fun onStop() {
+        foreground.value = false
+        super.onStop()
+    }
     override fun onResume() {
         super.onResume()
         resumeGeneration.intValue += 1
@@ -40,7 +50,8 @@ class MainActivity : ComponentActivity() {
             } else {
                 CoreMessengerApp(
                     coreRepositoryOverride ?: CoreAppRepository.instance(applicationContext),
-                    resumeGeneration.intValue
+                    resumeGeneration.intValue,
+                    foreground.value
                 )
             }
         }

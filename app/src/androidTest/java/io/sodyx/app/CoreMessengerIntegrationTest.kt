@@ -97,6 +97,8 @@ internal class MemoryRelay : RelayTransport {
     var tamperNextSend = false
     var revocations = 0
 
+    @Volatile var receiveCalls = 0
+
     override suspend fun createMailbox(ttlSeconds: Int): RelayMailboxProvision {
         val expiry = System.currentTimeMillis() + ttlSeconds * 1000L
         val provision = RelayMailboxProvision(
@@ -134,10 +136,12 @@ internal class MemoryRelay : RelayTransport {
         return id
     }
 
-    override suspend fun receive(source: RelayRetrievalMailbox): List<RelayReceivedEnvelope> =
-        boxes.single {
+    override suspend fun receive(source: RelayRetrievalMailbox): List<RelayReceivedEnvelope> {
+        receiveCalls++
+        return boxes.single {
             it.provision.retrieval.authorizationValue() == source.authorizationValue()
         }.messages.toList()
+    }
 
     override suspend fun acknowledge(source: RelayRetrievalMailbox, id: RelayDeliveryId) {
         boxes.single { it.provision.retrieval.authorizationValue() == source.authorizationValue() }

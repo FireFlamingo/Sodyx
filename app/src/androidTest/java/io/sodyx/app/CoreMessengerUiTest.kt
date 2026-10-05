@@ -9,8 +9,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.sodyx.app.data.CoreContactState
 import io.sodyx.app.data.CoreMessengerRepository
 import java.util.UUID
@@ -87,6 +89,13 @@ class CoreMessengerUiTest {
         waitFor("Bob")
         compose.onNodeWithText("Bob").performClick()
         waitFor("reply to the screen")
+        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        val callsWhileStopped = relay.receiveCalls
+        // Observe beyond the production polling interval while the activity is stopped.
+        Thread.sleep(11_000)
+        assertEquals(callsWhileStopped, relay.receiveCalls)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         assertTrue(
             compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
         )

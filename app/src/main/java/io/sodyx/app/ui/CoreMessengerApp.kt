@@ -51,13 +51,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-internal fun CoreMessengerApp(repository: CoreMessengerRepository, resumeGeneration: Int = 0) {
+internal fun CoreMessengerApp(
+    repository: CoreMessengerRepository,
+    resumeGeneration: Int = 0,
+    isForeground: Boolean = true
+) {
     val scope = rememberCoroutineScope()
     val controller = remember(repository, scope) { CoreMessengerController(repository, scope) }
     val state = controller.state
     LaunchedEffect(resumeGeneration) { controller.refresh() }
-    LaunchedEffect(state.conversation?.contact?.id, state.page) {
-        if (state.page == CorePage.Chat) {
+    LaunchedEffect(state.conversation?.contact?.id, state.page, isForeground) {
+        if (state.page == CorePage.Chat && isForeground) {
             controller.sync(false)
             while (isActive) {
                 delay(10_000)

@@ -47,6 +47,7 @@ Unsigned release APK: `app/build/outputs/apk/release/app-release-unsigned.apk`.
 Release signing belongs to the distributor; signing material must stay outside Git.
 
 Device tests cover encrypted storage, real libsignal state across reopen, pairing, queued delivery, tampering, replay, UI navigation, and closure. The live relay test requires an ADB-reversed local relay and the `sodyx.liveRelay` instrumentation argument. See [protocol details](docs/PROTOCOL.md) and [Android controls](docs/ANDROID_SECURITY.md).
+The [verification record](docs/VALIDATION.md) maps the core requirements to test evidence.
 
 ## Source control and license
 
